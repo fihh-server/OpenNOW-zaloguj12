@@ -1162,7 +1162,28 @@ export function SettingsPage({ settings, regions, onSettingChange, codecResults,
   }, []);
 
   useEffect(() => {
-    if (activeSection !== "thanks") {
+    const normalizedSearch = settingsSearch.trim().toLowerCase();
+    const showAll = normalizedSearch.length > 0;
+    const shouldShowThanks = activeSection === "thanks" || (showAll && (() => {
+      const terms = SETTINGS_SCOPE_SEARCH_TERMS["thanks"];
+      const searchTokens = normalizedSearch.split(/[^a-z0-9]+/).filter((token) => token.length > 0);
+      if (searchTokens.length === 0) {
+        return true;
+      }
+      const searchableWords = Array.from(
+        new Set(
+          terms
+            .join(" ")
+            .toLowerCase()
+            .split(/[^a-z0-9]+/)
+            .filter((word) => word.length > 0),
+        ),
+      );
+      const tokenMatchesWord = (token: string, word: string): boolean => token === word || word.startsWith(token);
+      return searchTokens.every((token) => searchableWords.some((word) => tokenMatchesWord(token, word)));
+    })());
+
+    if (!shouldShowThanks) {
       thanksRequestIdRef.current += 1;
       setThanksLoadState((current) => (current === "loading" || current === "error" ? "idle" : current));
       setThanksFetchError(null);
@@ -1210,7 +1231,7 @@ export function SettingsPage({ settings, regions, onSettingChange, codecResults,
         setThanksLoadState("error");
       },
     );
-  }, [activeSection, thanksData, thanksLoadState]);
+  }, [activeSection, thanksData, thanksLoadState, settingsSearch]);
 
   const renderPersonLink = useCallback((person: ThankYouContributor | ThankYouSupporter, content: JSX.Element) => {
     if (!person.profileUrl) {
