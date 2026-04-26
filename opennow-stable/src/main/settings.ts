@@ -63,6 +63,8 @@ export interface Settings {
   instantReplayEnabled: boolean;
   /** Maximum amount of recent stream video to keep in the replay buffer */
   instantReplayDurationSeconds: number;
+  /** Custom output directory for recordings (empty = default ~/Pictures/OpenNOW/Recordings) */
+  recordingOutputPath: string;
   /** Show the Anti-AFK indicator badge while streaming */
   showAntiAfkIndicator: boolean;
   /** Show the stats overlay automatically when a stream launches */
@@ -135,6 +137,7 @@ const DEFAULT_SETTINGS: Settings = {
   hideStreamButtons: false,
   instantReplayEnabled: false,
   instantReplayDurationSeconds: 30,
+  recordingOutputPath: "",
   showAntiAfkIndicator: true,
   showStatsOnLaunch: false,
   hideServerSelector: false,

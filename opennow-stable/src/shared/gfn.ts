@@ -153,6 +153,7 @@ export interface Settings {
   hideStreamButtons: boolean;
   instantReplayEnabled: boolean;
   instantReplayDurationSeconds: number;
+  recordingOutputPath: string;
   showAntiAfkIndicator: boolean;
   showStatsOnLaunch: boolean;
   /** Skip the free-tier queue server selection modal and launch with default routing */

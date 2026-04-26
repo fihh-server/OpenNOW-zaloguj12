@@ -842,6 +842,7 @@ export function App(): JSX.Element {
     hideStreamButtons: false,
     instantReplayEnabled: false,
     instantReplayDurationSeconds: 30,
+    recordingOutputPath: "",
     showAntiAfkIndicator: true,
     showStatsOnLaunch: false,
     hideServerSelector: false,

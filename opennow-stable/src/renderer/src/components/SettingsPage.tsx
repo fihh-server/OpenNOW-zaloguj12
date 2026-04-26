@@ -1879,24 +1879,75 @@ export function SettingsPage({ settings, regions, onSettingChange, codecResults,
 
                 {settings.instantReplayEnabled && (
                   <div className="settings-row settings-row--column">
-                    <label className="settings-label">Replay Buffer Length</label>
-                    <div className="settings-chip-row">
-                    {[30, 60, 120, 180, 240, 300].map((seconds) => (
-                      <button
-                        key={seconds}
-                        type="button"
-                        className={`settings-chip ${settings.instantReplayDurationSeconds === seconds ? "active" : ""}`}
-                        onClick={() => handleChange("instantReplayDurationSeconds", seconds)}
-                      >
-                        <span>{seconds === 300 ? "5 min" : `${seconds}s`}</span>
-                      </button>
-                    ))}
+                    <div className="settings-row-top">
+                      <label className="settings-label">Replay Buffer Length</label>
+                      <span className="settings-value-badge">{settings.instantReplayDurationSeconds === 300 ? "5 min" : `${settings.instantReplayDurationSeconds}s`}</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <input
+                        type="range"
+                        className="settings-slider"
+                        min={30}
+                        max={300}
+                        step={30}
+                        value={settings.instantReplayDurationSeconds}
+                        onChange={(e) => handleChange("instantReplayDurationSeconds", parseInt(e.target.value, 10))}
+                      />
+                      <input
+                        type="number"
+                        className="settings-number-input"
+                        style={{ width: 80 }}
+                        min={30}
+                        max={300}
+                        step={30}
+                        value={settings.instantReplayDurationSeconds}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value || "30", 10);
+                          if (Number.isFinite(v)) handleChange("instantReplayDurationSeconds", Math.max(30, Math.min(300, v)));
+                        }}
+                      />
+                    </div>
+                    <span className="settings-subtle-hint">
+                      Save up to the last {settings.instantReplayDurationSeconds === 300 ? "5 minutes" : `${settings.instantReplayDurationSeconds} seconds`} of your stream for instant replay.
+                    </span>
+                  </div>
+                )}
+
+                {settings.instantReplayEnabled && (
+                  <div className="settings-row settings-row--column" style={{ backgroundColor: "rgba(255, 193, 7, 0.1)", border: "1px solid rgba(255, 193, 7, 0.3)", borderRadius: "4px", padding: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                      <span style={{ color: "#ffc107", fontSize: "18px", marginTop: "2px" }}>⚠</span>
+                      <span style={{ color: "#ffc107", fontSize: "14px", lineHeight: "1.4" }}>
+                        Instant replay uses additional CPU and disk space. Performance may degrade on low-end hardware. Disable if experiencing stuttering.
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="settings-row settings-row--column">
+                  <label className="settings-label">Recording Output Path</label>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      type="text"
+                      value={settings.recordingOutputPath}
+                      onChange={(e) => handleChange("recordingOutputPath", e.target.value)}
+                      placeholder="Default: ~/Pictures/OpenNOW/Recordings"
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        backgroundColor: "#1e1e1e",
+                        border: "1px solid #404040",
+                        borderRadius: "4px",
+                        color: "#e0e0e0",
+                        fontSize: "13px",
+                        fontFamily: "inherit"
+                      }}
+                    />
                   </div>
                   <span className="settings-subtle-hint">
-                    Save up to the last {settings.instantReplayDurationSeconds} seconds of your stream for instant replay.
+                    Leave empty for the default location. Recordings and replays will be saved here.
                   </span>
                 </div>
-                )}
 
                 <div className="settings-row settings-row--column">
                   <div className="settings-row-top settings-row-top--compact">

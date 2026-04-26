@@ -792,6 +792,38 @@ export function StreamView({
     };
   }, [micTrack]);
 
+  const buildInstantReplayStream = useCallback((): { composed: MediaStream; audioCtx: AudioContext | null } | null => {
+    const video = localVideoRef.current;
+    if (!video || !video.srcObject) {
+      return null;
+    }
+
+    const stream = video.srcObject as MediaStream;
+    const composed = new MediaStream();
+    const videoTracks = stream.getVideoTracks();
+    if (videoTracks.length === 0) {
+      return null;
+    }
+    videoTracks.forEach((track) => composed.addTrack(track));
+
+    const videoAudioTracks = stream.getAudioTracks();
+    if (videoAudioTracks.length > 0) {
+      videoAudioTracks.forEach((track) => composed.addTrack(track));
+    } else {
+      const audioEl = localAudioRef.current;
+      const gameAudioStream = audioEl?.srcObject instanceof MediaStream ? audioEl.srcObject : null;
+      if (gameAudioStream && gameAudioStream.getAudioTracks().length > 0) {
+        gameAudioStream.getAudioTracks().forEach((track) => composed.addTrack(track));
+      }
+    }
+
+    if (micTrack && micTrack.readyState === "live") {
+      composed.addTrack(micTrack);
+    }
+
+    return { composed, audioCtx: null };
+  }, [micTrack]);
+
   const trimInstantReplayBuffer = useCallback(() => {
     const cutoff = Date.now() - instantReplayDurationSeconds * 1000;
     instantReplayBufferRef.current = instantReplayBufferRef.current.filter((item) => item.timestamp >= cutoff);
@@ -1317,6 +1349,9 @@ export function StreamView({
       return;
     }
 
+    // Pause instant replay while recording to save CPU on low-end hardware
+    stopInstantReplayRecorder();
+
     const streamInfo = buildComposedStream();
     if (!streamInfo) {
       setRecordingError("Stream is not ready for recording yet.");
@@ -1446,7 +1481,7 @@ export function StreamView({
 
     mediaRecorderRef.current = recorder;
     recorder.start(2000);
-  }, [buildComposedStream, gameTitle, isRecording, micTrack, recordingApiAvailable]);
+  }, [buildComposedStream, gameTitle, isRecording, micTrack, recordingApiAvailable, stopInstantReplayRecorder]);
 
   // Cleanup: abort any active recording on unmount
   useEffect(() => {
@@ -1477,6 +1512,29 @@ export function StreamView({
       return;
     }
 
+    const recorder = instantReplayRecorderRef.current;
+    if (recorder && recorder.state === "recording") {
+      await new Promise<void>((resolve) => {
+        let resolved = false;
+        const onDataAvailable = () => {
+          if (resolved) return;
+          resolved = true;
+          recorder.removeEventListener("dataavailable", onDataAvailable);
+          resolve();
+        };
+
+        recorder.addEventListener("dataavailable", onDataAvailable);
+        recorder.requestData();
+        window.setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            recorder.removeEventListener("dataavailable", onDataAvailable);
+            resolve();
+          }
+        }, 2000);
+      });
+    }
+
     const buffer = instantReplayBufferRef.current;
     if (buffer.length === 0) {
       setInstantReplayError("No instant replay content is available yet. Wait for the stream to start.");
@@ -1486,11 +1544,12 @@ export function StreamView({
     setIsSavingReplay(true);
     try {
       const mimeType = instantReplayMimeTypeRef.current || getSupportedRecordingMimeType();
-
       const result = await window.openNow.beginRecording({ mimeType });
       const recordingId = result.recordingId;
-      const replayBlob = new Blob(buffer.map((item) => item.data), { type: mimeType });
-      await window.openNow.sendRecordingChunk({ recordingId, chunk: await replayBlob.arrayBuffer() });
+
+      for (const item of buffer) {
+        await window.openNow.sendRecordingChunk({ recordingId, chunk: await item.data.arrayBuffer() });
+      }
 
       const durationMs = Math.max(0, buffer[buffer.length - 1].timestamp - buffer[0].timestamp);
       let thumbnailDataUrl: string | undefined;
@@ -1527,8 +1586,6 @@ export function StreamView({
         thumbnailDataUrl,
       });
       setRecordings((prev) => [entry, ...prev].slice(0, 20));
-      // Keep buffer for overlapping saves
-      // clearInstantReplayBuffer();
       setNotification("Replay Saved");
       setTimeout(() => setNotification(null), 3000);
     } catch (error) {
@@ -1537,12 +1594,14 @@ export function StreamView({
     } finally {
       setIsSavingReplay(false);
     }
-  }, [instantReplayEnabled, recordingApiAvailable, gameTitle, clearInstantReplayBuffer]);
+  }, [instantReplayEnabled, recordingApiAvailable, gameTitle]);
 
   useEffect(() => {
-    if (!instantReplayEnabled) {
+    if (!instantReplayEnabled || !isStreaming || isRecording) {
       stopInstantReplayRecorder();
-      clearInstantReplayBuffer();
+      if (!instantReplayEnabled) {
+        clearInstantReplayBuffer();
+      }
       return;
     }
 
@@ -1551,7 +1610,7 @@ export function StreamView({
       return;
     }
 
-    const streamInfo = buildComposedStream();
+    const streamInfo = buildInstantReplayStream();
     if (!streamInfo) {
       return;
     }
@@ -1560,7 +1619,9 @@ export function StreamView({
     instantReplayMimeTypeRef.current = mimeType;
 
     const { composed, audioCtx } = streamInfo;
-    instantReplayAudioCtxRef.current = audioCtx;
+    if (audioCtx) {
+      instantReplayAudioCtxRef.current = audioCtx;
+    }
 
     const recorder = new MediaRecorder(composed, { mimeType });
     recorder.ondataavailable = (e) => {
@@ -1581,13 +1642,13 @@ export function StreamView({
     };
 
     instantReplayRecorderRef.current = recorder;
-    recorder.start(1000);
+    recorder.start(3000);
     setInstantReplayError(null);
 
     return () => {
       stopInstantReplayRecorder();
     };
-  }, [instantReplayEnabled, recordingApiAvailable, buildComposedStream, trimInstantReplayBuffer, stopInstantReplayRecorder, isStreaming]);
+  }, [instantReplayEnabled, recordingApiAvailable, buildInstantReplayStream, trimInstantReplayBuffer, stopInstantReplayRecorder, isStreaming, isRecording]);
 
   const setVideoRef = useCallback((element: HTMLVideoElement | null) => {
     localVideoRef.current = element;
