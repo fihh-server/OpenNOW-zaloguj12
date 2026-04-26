@@ -47,6 +47,8 @@ export function formatPlaytime(totalSeconds: number): string {
 export function formatLastPlayed(isoString: string | null): string {
   if (!isoString) return "Never";
   const then = new Date(isoString);
+  if (isNaN(then.getTime())) return "Never";
+
   const now = new Date();
 
   const thenDay = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime();

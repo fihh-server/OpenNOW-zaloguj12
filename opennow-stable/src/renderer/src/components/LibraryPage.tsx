@@ -23,6 +23,8 @@ function formatLastPlayed(date?: string): string {
   if (!date) return "Never played";
 
   const lastPlayed = new Date(date);
+  if (isNaN(lastPlayed.getTime())) return "Never played";
+
   const now = new Date();
   const diffMs = now.getTime() - lastPlayed.getTime();
   const diffMins = Math.floor(diffMs / 60000);

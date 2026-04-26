@@ -327,6 +327,7 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
 function sortLibraryGames(games: GameInfo[], sortId: string): GameInfo[] {
   const copy = [...games];
   const compareTitle = (left: GameInfo, right: GameInfo) => left.title.localeCompare(right.title);
+  const getTime = (dateStr?: string) => dateStr ? new Date(dateStr).getTime() || 0 : 0;
   if (sortId === "z_to_a") {
     return copy.sort((left, right) => right.title.localeCompare(left.title));
   }
@@ -335,16 +336,8 @@ function sortLibraryGames(games: GameInfo[], sortId: string): GameInfo[] {
   }
   if (sortId === "last_played") {
     return copy.sort((left, right) => {
-      const leftTime = left.lastPlayed ? new Date(left.lastPlayed).getTime() : 0;
-      const rightTime = right.lastPlayed ? new Date(right.lastPlayed).getTime() : 0;
-      if (leftTime === rightTime) return compareTitle(left, right);
-      return rightTime - leftTime;
-    });
-  }
-  if (sortId === "last_added") {
-    return copy.sort((left, right) => {
-      const leftTime = left.isInLibrary ? new Date(left.lastPlayed ?? 0).getTime() : 0;
-      const rightTime = right.isInLibrary ? new Date(right.lastPlayed ?? 0).getTime() : 0;
+      const leftTime = getTime(left.lastPlayed);
+      const rightTime = getTime(right.lastPlayed);
       if (leftTime === rightTime) return compareTitle(left, right);
       return rightTime - leftTime;
     });
@@ -4258,7 +4251,7 @@ export function App(): JSX.Element {
               selectedVariantByGameId={variantByGameId}
               onSelectGameVariant={handleSelectGameVariant}
               libraryCount={libraryGames.length}
-              sortOptions={catalogSortOptions.filter((option) => option.id !== "relevance")}
+              sortOptions={catalogSortOptions.filter((option) => option.id !== "relevance" && option.id !== "last_added")}
               selectedSortId={catalogSelectedSortId === "relevance" ? "last_played" : catalogSelectedSortId}
               onSortChange={setCatalogSelectedSortId}
             />
