@@ -54,3 +54,4 @@ result
 .deriveddata/
 .deriveddata-device/
 graphify-out/
+.cursor/
