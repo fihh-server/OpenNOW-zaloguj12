@@ -178,12 +178,11 @@ function formatWarningSeconds(value: number | undefined): string | null {
 
 const getSupportedRecordingMimeType = (): string => {
   const mimeTypes = [
-    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-    "video/mp4;codecs=avc1",
-    "video/mp4",
-    "video/webm;codecs=h264",
     "video/webm;codecs=vp8",
+    "video/webm;codecs=h264",
     "video/webm",
+    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+    "video/mp4",
   ];
   return mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
 };
@@ -1389,6 +1388,7 @@ export function StreamView({
     }, 500);
 
     let isFirstChunk = true;
+    const pendingChunkWrites = new Set<Promise<void>>();
     const recorder = new MediaRecorder(composed, { mimeType });
 
     recorder.ondataavailable = (e: BlobEvent) => {
@@ -1428,16 +1428,18 @@ export function StreamView({
         }
       }
 
-      void e.data.arrayBuffer().then((buf) => {
-        const id = recordingIdRef.current;
-        if (!id) return;
-        window.openNow.sendRecordingChunk({ recordingId: id, chunk: buf }).catch((err: unknown) => {
-          console.error("[StreamView] Failed to send recording chunk:", err);
-        });
+      const id = recordingIdRef.current;
+      if (!id) return;
+
+      const writePromise = e.data.arrayBuffer().then((buf) => {
+        return window.openNow.sendRecordingChunk({ recordingId: id, chunk: buf });
       });
+
+      pendingChunkWrites.add(writePromise);
+      writePromise.finally(() => pendingChunkWrites.delete(writePromise));
     };
 
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
       window.clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = undefined;
       audioCtxRef.current?.close().catch(() => undefined);
@@ -1448,22 +1450,29 @@ export function StreamView({
 
       if (!id) return;
 
+      try {
+        await Promise.all(Array.from(pendingChunkWrites));
+      } catch (err: unknown) {
+        console.error("[StreamView] Failed to write recorded chunks:", err);
+        setRecordingError("Recording could not be saved.");
+        await window.openNow.abortRecording({ recordingId: id }).catch(() => undefined);
+        return;
+      }
+
       const durationMs = Date.now() - recordingStartTimeRef.current;
-      void window.openNow
-        .finishRecording({
+      try {
+        const entry = await window.openNow.finishRecording({
           recordingId: id,
           durationMs,
           gameTitle,
           thumbnailDataUrl: thumbnailDataUrlRef.current ?? undefined,
-        })
-        .then((entry) => {
-          setRecordings((prev) => [entry, ...prev].slice(0, 20));
-          thumbnailDataUrlRef.current = null;
-        })
-        .catch((err: unknown) => {
-          console.error("[StreamView] Failed to finish recording:", err);
-          setRecordingError("Recording could not be saved.");
         });
+        setRecordings((prev) => [entry, ...prev].slice(0, 20));
+        thumbnailDataUrlRef.current = null;
+      } catch (err: unknown) {
+        console.error("[StreamView] Failed to finish recording:", err);
+        setRecordingError("Recording could not be saved.");
+      }
     };
 
     recorder.onerror = () => {
@@ -1555,7 +1564,7 @@ export function StreamView({
         await window.openNow.sendRecordingChunk({ recordingId, chunk: await item.data.arrayBuffer() });
       }
 
-      const durationMs = Math.max(0, buffer[buffer.length - 1].timestamp - buffer[0].timestamp);
+      const durationMs = Math.max(0, Math.max(...buffer.map((b) => b.timestamp)) - Math.min(...buffer.map((b) => b.timestamp)));
       let thumbnailDataUrl: string | undefined;
       const video = localVideoRef.current;
       if (video && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -1646,7 +1655,7 @@ export function StreamView({
     };
 
     instantReplayRecorderRef.current = recorder;
-    recorder.start(3000);
+    recorder.start(1000);
     setInstantReplayError(null);
 
     return () => {
